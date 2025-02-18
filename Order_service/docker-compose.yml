@@ -7,8 +7,9 @@ services:
       - "8000:8000"
     volumes:
       - .:/app
-    depends_on: 
-      - db
+    depends_on:
+      db:
+        condition: service_healthy  # Wait for database
     environment:
       - DATABASE_URL=postgres://order_user:Sonu%40123@db:5432/order_service_db
 
@@ -24,6 +25,11 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U order_user -d order_service_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
 volumes:
   postgres_data:
