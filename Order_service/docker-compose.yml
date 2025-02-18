@@ -7,3 +7,23 @@ services:
       - "8000:8000"
     volumes:
       - .:/app
+    depends_on: 
+      - db
+    environment:
+      - DATABASE_URL=postgres://order_user:Sonu%40123@db:5432/order_service_db
+
+  db:
+    image: postgres:15
+    container_name: postgres_db
+    restart: always
+    environment:
+      POSTGRES_USER: order_user
+      POSTGRES_PASSWORD: Sonu@123
+      POSTGRES_DB: order_service_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+volumes:
+  postgres_data:
