@@ -6,5 +6,4 @@ redis==4.5.1                 # Redis for caching
 celery==5.2.7                # Celery for background tasks
 django-cors-headers==4.2.0   # CORS support for frontend integration
 gunicorn==21.2.0             # Production WSGI server
-psycopg2-binary==2.9.6  # PostgreSQL Database Adapter (Only if using PostgreSQL)
 Pillow==10.0.0  # <-- Add this

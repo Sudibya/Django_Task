@@ -15,3 +15,5 @@ class Item(models.Model):
 
     def __str__(self):
         return self.name  # Returns the item name when printed
+
+

@@ -89,7 +89,7 @@ DATABASES = {
         'NAME': 'order_service_db',
         'USER': 'order_user',
         'PASSWORD': 'Sonu@123',
-        'HOST': 'localhost',
+        'HOST': 'db',
         'PORT': '5432',  # Default is '5432'
     }
 }
