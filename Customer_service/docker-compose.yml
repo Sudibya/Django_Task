@@ -1,0 +1,35 @@
+version: '3.8'
+services:
+  django_app:
+    build: .
+    container_name: django_CustomerService
+    ports:
+      - "8001:8001"
+    volumes:
+      - .:/app
+    depends_on:
+      db_customer:
+        condition: service_healthy
+    environment:
+      - DATABASE_URL=postgres://customer_user:CustPass@db_customer:5432/customer_service_db
+
+  db_customer:
+    image: postgres:15
+    container_name: postgres_customer_db
+    restart: always
+    environment:
+      POSTGRES_USER: customer_user
+      POSTGRES_PASSWORD: Sonu@123
+      POSTGRES_DB: customer_service_db
+    ports:
+      - "5434:5432"  # Maps host port 5434 to container port 5432
+    volumes:
+      - postgres_customer_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U customer_user -d customer_service_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres_customer_data:
