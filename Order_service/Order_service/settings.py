@@ -150,3 +150,23 @@ REST_FRAMEWORK = {
         'rest_framework.permissions.AllowAny',
     ],
 }
+
+
+REDIS_HOST = 'localhost'  # Redis server host
+REDIS_PORT = 6379         # Redis port
+REDIS_DB = 0              # Redis database (0-15, can be set to other numbers)
+
+# Caching with Redis
+CACHES = {
+    'default': {
+        'BACKEND': 'django_redis.cache.RedisCache',  # Ensure this is correct
+        'LOCATION': 'redis://localhost:6379/1',      # Redis URL; update as needed
+        'OPTIONS': {
+            'CLIENT_CLASS': 'django_redis.client.DefaultClient',
+        }
+    }
+}
+
+# Session management with Redis (optional)
+SESSION_ENGINE = 'django.contrib.sessions.backends.cache'
+SESSION_CACHE_ALIAS = 'default'

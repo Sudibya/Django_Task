@@ -9,3 +9,4 @@ gunicorn==21.2.0             # Production WSGI server
 Pillow==10.0.0  # <-- Add this
 confluent-kafka==2.4.0 
 # quixstreams==3.8.0        # Quix Streams for Kafka event-driven messaging
+django-redis==5.2.0          # Django Redis integration for caching

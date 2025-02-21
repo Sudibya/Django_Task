@@ -70,15 +70,56 @@ while running:
                 logger.error(f"❌ JSON decode error: {e}")
                 continue
 
-            # Use the ItemCopySerializer to validate and create the ItemCopy instance
-            serializer = ItemCopySerializer(data=item_data_json.get('item', {}))
+            # Action from the Kafka message
+            action = item_data_json.get('action', None)
             
-            if serializer.is_valid():
-                # Save directly to the database
-                item_copy = serializer.save()  # This saves the instance directly
-                logger.info(f"✅ Item successfully saved: {item_copy.name}")
+            if action == 'create' or action == 'update':
+                # Create or update the item as per previous logic
+                item_id = item_data_json.get('item', {}).get('id', None)
+                
+                if item_id:
+                    # Try to get the existing item from the database by ID
+                    try:
+                        item_copy = ItemCopy.objects.get(id=item_id)
+                        logger.info(f"✅ Found item to {action}: {item_copy.name}")
+                        
+                        # Use the serializer to create or update the item
+                        serializer = ItemCopySerializer(item_copy, data=item_data_json.get('item', {}), partial=True)
+                        if serializer.is_valid():
+                            # Save item (either create or update)
+                            item_copy = serializer.save()
+                            logger.info(f"✅ Item {action}d: {item_copy.name}")
+                        else:
+                            logger.error("❌ Invalid data for update: %s", serializer.errors)
+                    except ItemCopy.DoesNotExist:
+                        if action == 'create':
+                            logger.warning(f"❌ Item with ID {item_id} does not exist. Creating a new item.")
+                            serializer = ItemCopySerializer(data=item_data_json.get('item', {}))
+                            if serializer.is_valid():
+                                item_copy = serializer.save()
+                                logger.info(f"✅ Item created: {item_copy.name}")
+                            else:
+                                logger.error("❌ Invalid data for creation: %s", serializer.errors)
+                        else:
+                            logger.warning(f"❌ Item with ID {item_id} does not exist and cannot be updated.")
+                else:
+                    logger.error("❌ Item ID is missing in the message.")
+
+            elif action == 'delete':
+                # Handle delete action
+                item_id = item_data_json.get('item', {}).get('id', None)
+                if item_id:
+                    try:
+                        item_copy = ItemCopy.objects.get(id=item_id)
+                        logger.info(f"✅ Found item to delete: {item_copy.name}")
+                        item_copy.delete()  # Delete the item
+                        logger.info(f"✅ Item deleted: {item_copy.name}")
+                    except ItemCopy.DoesNotExist:
+                        logger.error(f"❌ Item with ID {item_id} does not exist. Cannot delete.")
+                else:
+                    logger.error("❌ Item ID is missing for delete operation.")
             else:
-                logger.error("❌ Invalid item data: %s", serializer.errors)
+                logger.error(f"❌ Unknown action: {action}")
 
     except Exception as e:
         logger.error(f"Error processing message: {e}")
