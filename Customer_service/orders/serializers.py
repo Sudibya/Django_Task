@@ -4,7 +4,7 @@ from .models import ItemCopy, Order
 class ItemCopySerializer(serializers.ModelSerializer):
     class Meta:
         model = ItemCopy
-        fields = '__all__'  # Includes name and image
+        fields = ['id', 'name', 'image']  # Includes name and image
 
 class OrderSerializer(serializers.ModelSerializer):
     class Meta:

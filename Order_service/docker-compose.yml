@@ -12,6 +12,9 @@ services:
         condition: service_healthy  # Wait for database
     environment:
       - DATABASE_URL=postgres://order_user:Sonu%40123@db:5432/order_service_db
+      - KAFKA_BROKER=kafka:9092
+    networks:
+      - microservices_net
 
   db:
     image: postgres:15
@@ -22,7 +25,7 @@ services:
       POSTGRES_PASSWORD: Sonu@123
       POSTGRES_DB: order_service_db
     ports:
-      - "5432:5432"
+      - "5433:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -30,6 +33,12 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    networks:
+      - microservices_net
 
 volumes:
   postgres_data:
+
+networks:
+  microservices_net:
+    driver: bridge

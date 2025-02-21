@@ -1,6 +1,9 @@
 # Use the official Python image
 FROM python:3.10
 
+# Install PostgreSQL client tools so pg_isready is available
+RUN apt-get update && apt-get install -y postgresql-client
+
 # Set the working directory inside the container
 WORKDIR /app
 
@@ -15,10 +18,4 @@ COPY . .
 EXPOSE 8000
 
 # Run migrations and start the Django server
-CMD ["sh", "-c", "
-    until pg_isready -h postgres_db -p 5432; do
-        echo 'Waiting for PostgreSQL...';
-        sleep 2;
-    done;
-    python manage.py migrate &&
-    python manage.py runserver 0.0.0.0:8000"]
+CMD ["sh", "-c", "until pg_isready -h postgres_db -p 5432; do echo 'Waiting for PostgreSQL...'; sleep 2; done; python manage.py migrate && python manage.py runserver 0.0.0.0:8000"]
