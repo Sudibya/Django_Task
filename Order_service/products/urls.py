@@ -10,7 +10,5 @@ router.register(r'items', ItemViewSet)  # /api/items/
 # Include the router URLs
 urlpatterns = [
     path('', include(router.urls)),  # Adds all endpoints automatically
-
-    # Added for likes 
     path('items/<int:item_id>/like/', ItemViewSet.as_view({'post': 'like_item'}), name='item-like'),
 ]

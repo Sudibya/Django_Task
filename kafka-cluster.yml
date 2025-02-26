@@ -29,6 +29,8 @@ services:
     networks:
       - microservices_net  # Ensure Kafka is connected to the same network
 
+      # Here we will went to create a network for our microservices
+
 networks:
   microservices_net:
     external: false  # Change to false if network is to be created by Docker Compose

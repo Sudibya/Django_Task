@@ -10,8 +10,8 @@ from .serializers import CustomUserSerializer, ItemSerializer
 
 logger = logging.getLogger(__name__)
 
-# Redis connection
-redis_client = redis.StrictRedis(host='localhost', port=6379, db=0)  # Update Redis host and port as necessary
+# Redis connection (since Redis is installed inside this container, use localhost)
+redis_client = redis.StrictRedis(host='localhost', port=6379, db=0)
 
 def get_kafka_producer(retries=5, delay=5):
     """
@@ -30,16 +30,14 @@ def get_kafka_producer(retries=5, delay=5):
             time.sleep(delay)
     raise Exception("❌ Could not connect to Kafka broker after {} attempts".format(retries))
 
-
-# ✅ Callback function for Kafka message delivery
+# Callback function for Kafka message delivery
 def delivery_report(err, msg):
     if err is not None:
         logger.error("❌ Kafka delivery failed: %s", err)
     else:
         logger.info("✅ Kafka message delivered to %s [%s]", msg.topic(), msg.partition())
 
-
-# 🚀 ViewSet for CustomUser with random ordering
+# ViewSet for CustomUser with random ordering
 class CustomUserViewSet(viewsets.ModelViewSet):
     queryset = CustomUser.objects.all()
     serializer_class = CustomUserSerializer
@@ -48,8 +46,7 @@ class CustomUserViewSet(viewsets.ModelViewSet):
         """Return users in random order"""
         return CustomUser.objects.order_by("?")[:1]
 
-
-# 🚀 ViewSet for handling Item CRUD operations using confluent_kafka for event publishing
+# ViewSet for handling Item CRUD operations using confluent_kafka for event publishing
 class ItemViewSet(viewsets.ModelViewSet):
     queryset = Item.objects.all()
     serializer_class = ItemSerializer
@@ -63,14 +60,15 @@ class ItemViewSet(viewsets.ModelViewSet):
             producer = get_kafka_producer()
             producer.produce(
                 topic='items_topic',
-                key=b"key.user.event",  # 🔹 Key should be in bytes
-                value=json.dumps(event_data).encode('utf-8'),  # 🔹 Value should be in bytes
-                callback=delivery_report  # 🔹 Callback for error handling
+                key=b"key.user.event",  # Key should be in bytes
+                value=json.dumps(event_data).encode('utf-8'),  # Value should be in bytes
+                callback=delivery_report  # Callback for error handling
             )
-            producer.flush()   # 🔹 Non-blocking alternative to flush()
+            producer.flush()
             logger.info("✅ Kafka event sent: %s", event_data)
         except Exception as e:
             logger.error("❌ Error sending Kafka event: %s", e)
+            # You can choose to propagate the error or simply log it.
 
     def _update_like_count(self, item_id):
         """
@@ -84,13 +82,13 @@ class ItemViewSet(viewsets.ModelViewSet):
         
         # Get the item data from the database for the top 3 items
         top_item_data = []
-        for item_id in top_items:
+        for redis_item_id in top_items:
             try:
-                item = Item.objects.get(id=item_id.decode('utf-8'))  # Decode item_id from Redis byte format
+                item = Item.objects.get(id=redis_item_id.decode('utf-8'))
                 item_data = ItemSerializer(item).data
                 top_item_data.append(item_data)
             except Item.DoesNotExist:
-                logger.error(f"Item with ID {item_id.decode('utf-8')} does not exist in the database.")
+                logger.error(f"Item with ID {redis_item_id.decode('utf-8')} does not exist in the database.")
         
         # Store the top 3 items in Redis
         redis_client.set('top_3_items', json.dumps(top_item_data))
@@ -100,10 +98,18 @@ class ItemViewSet(viewsets.ModelViewSet):
         """
         Like an item, increment the like count, and update the top 3 items in Redis.
         """
-        # Increment the like count
-        self._update_like_count(item_id)
+        # Validate that the item exists
+        try:
+            Item.objects.get(id=item_id)
+        except Item.DoesNotExist:
+            return Response({"error": f"Item {item_id} not found."}, status=status.HTTP_404_NOT_FOUND)
         
-        # Return the response
+        try:
+            self._update_like_count(item_id)
+        except Exception as e:
+            logger.error(f"Error updating like count: {e}")
+            return Response({"error": "Error updating like count."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
         return Response({"message": f"Item {item_id} liked successfully!"}, status=status.HTTP_200_OK)
 
     def _get_cached_top_items(self):
@@ -119,20 +125,15 @@ class ItemViewSet(viewsets.ModelViewSet):
     def retrieve(self, request, *args, **kwargs):
         """
         Override retrieve to return top 3 items from Redis first, then from DB after 10 seconds.
+        Note: This blocking call (time.sleep(10)) will delay the response.
         """
         cached_items = self._get_cached_top_items()
+        response_data = {"cached_data": cached_items or "No cached data available"}
 
-        if cached_items:
-            # Return top 3 items from Redis immediately
-            response_data = {"cached_data": cached_items}
-        else:
-            # If not found in Redis, fall back to DB query and cache it
-            response_data = {"cached_data": "No cached data available"}
-
-        # Wait 10 seconds before returning data from the DB
+        # Simulate delay (blocking call)
         time.sleep(10)
         
-        # Fetch data from the DB (for fallback if Redis was empty or for fresh data)
+        # Fetch fresh data from the database
         all_items = Item.objects.all()
         all_items_data = ItemSerializer(all_items, many=True).data
         response_data["database_data"] = all_items_data
@@ -142,27 +143,58 @@ class ItemViewSet(viewsets.ModelViewSet):
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        item = serializer.save()
-        self._send_kafka_event('create', serializer.data)
-        self._update_like_count(item.id)  # Update like count when item is created
+        try:
+            item = serializer.save()
+        except Exception as e:
+            logger.error("Error saving item: %s", e)
+            return Response({"error": "Error saving item."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
+        try:
+            self._send_kafka_event('create', serializer.data)
+        except Exception as e:
+            logger.error("Error sending Kafka event during creation: %s", e)
+            # Optionally, handle this error or continue
+        
+        try:
+            self._update_like_count(item.id)  # Update like count when item is created
+        except Exception as e:
+            logger.error("Error updating like count during creation: %s", e)
+            # Optionally, handle this error or continue
+        
         return Response(serializer.data, status=status.HTTP_201_CREATED)
 
     def update(self, request, *args, **kwargs):
-        """Update an existing item and send a Kafka event"""
         partial = kwargs.pop('partial', False)
-        instance = self.get_object()  # Get the item from the database
+        instance = self.get_object()
         serializer = self.get_serializer(instance, data=request.data, partial=partial)
         serializer.is_valid(raise_exception=True)
-        item = serializer.save()  # Save the updated item
-        self._send_kafka_event('update', serializer.data)  # Send Kafka event
-        self._update_like_count(item.id)  # Update like count when item is updated
+        try:
+            item = serializer.save()
+        except Exception as e:
+            logger.error("Error updating item: %s", e)
+            return Response({"error": "Error updating item."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
+        try:
+            self._send_kafka_event('update', serializer.data)
+        except Exception as e:
+            logger.error("Error sending Kafka event during update: %s", e)
+        try:
+            self._update_like_count(item.id)  # Update like count when item is updated
+        except Exception as e:
+            logger.error("Error updating like count during update: %s", e)
+        
         return Response(serializer.data)
 
     def destroy(self, request, *args, **kwargs):
-        """Delete an existing item and send a Kafka event"""
-        instance = self.get_object()  # Get the item from the database
-        item_data = self.get_serializer(instance).data  # Get the data to send to Kafka
-        self.perform_destroy(instance)  # Actually delete the item
-        self._send_kafka_event('delete', item_data)  # Send Kafka event
-        self._update_like_count(instance.id)  # Update like count when item is deleted
+        instance = self.get_object()
+        item_data = self.get_serializer(instance).data
+        self.perform_destroy(instance)
+        try:
+            self._send_kafka_event('delete', item_data)
+        except Exception as e:
+            logger.error("Error sending Kafka event during deletion: %s", e)
+        try:
+            self._update_like_count(instance.id)  # Update like count when item is deleted
+        except Exception as e:
+            logger.error("Error updating like count during deletion: %s", e)
         return Response(status=status.HTTP_204_NO_CONTENT)
