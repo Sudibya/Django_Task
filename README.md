@@ -29,7 +29,7 @@ This project is a microservices system built with Django that features separate 
 - **Event Streaming**
   - Utilizes Kafka & Zookeeper for asynchronous messaging between services.
 - **Data Persistence**
-  - Each microservice uses its own PostgreSQL instance.
+  - Each microservice uses its own PostgreSQL instance..
 
 ## Architecture Overview
 
