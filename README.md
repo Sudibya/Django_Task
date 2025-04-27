@@ -55,4 +55,4 @@ Use Docker Compose to build and start all services. The Docker configuration inc
 
 bash
 Copy
-docker-compose up --build
+docker-compose up --build sa
